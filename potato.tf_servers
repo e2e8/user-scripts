@@ -1,0 +1,63 @@
+// ==UserScript==
+// @name     potato.tf Server Browser
+// @version  1
+// @grant    none
+// @include  https://potato.tf/servers
+// @run-at   document-idle
+// @description This script filters the list of servers listed by the potatoe.tf server browser based on some hardcoded criteria
+// ==/UserScript==
+
+"use strict";
+
+function r() {
+  let servers = document.getElementById("serverDeck").childNodes;
+
+  for (const server of servers) {
+    if (server instanceof HTMLDivElement) {
+      let cols = server.childNodes;
+
+      //cols[1].childNodes[1];
+      const map = cols[3].childNodes[1].textContent;
+
+      const mission = cols[5].childNodes[1].textContent.trim();
+      const done = cols[5].childNodes[1].childNodes.length > 1 ? true : false;
+
+      const difficulty = cols[7].childNodes[1].childNodes[0].textContent;
+      const wave = cols[9].childNodes[1].textContent;
+      const wave_current = wave.split('/')[0].trim();
+      const wave_total = wave.split('/')[1].trim();
+      const state = cols[11].childNodes[1].textContent;
+
+      const players_present = cols[13].childNodes[1].childNodes[0].textContent.split('/')[0].trim();
+
+      //const players_total = cols[13].childNodes[1].childNodes[1].textContent;
+      //const players_total = cols[13].childNodes[1].childNodes[2].textContent;
+      //const classes = cols[15].childNodes[1];
+
+      const connect = cols[17].childNodes[1];
+
+      const text = "connect " + connect.href.split('/')[4];
+
+      let write = function (e) {
+        navigator.clipboard.writeText(text)
+          .then(
+            () => { },
+            () => {
+              console.log("error")
+            }
+          );
+        e.preventDefault();
+      };
+
+      connect.addEventListener('click', write, false);
+      connect.onclick = "";
+
+      if (state == "In-Wave" || wave_current != "1" || players_present == "6" || done) {
+        server.style.display = 'none';
+        //server.style.cssText = 'background-color: red !important';
+      }
+    }
+  }
+  setTimeout(r, 3000);
+}
+setTimeout(r, 3000);
