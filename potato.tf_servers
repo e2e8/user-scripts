@@ -4,10 +4,135 @@
 // @grant    none
 // @include  https://potato.tf/servers
 // @run-at   document-idle
-// @description This script filters the list of servers listed by the potatoe.tf server browser based on some hardcoded criteria
 // ==/UserScript==
 
 "use strict";
+
+let config = {
+  difficulty: new Set(["Expert","Advanced","Intermediate"]),
+  completed: new Set(["true","false"]),
+  wave: {
+  	min: 0,
+    max: 8
+  },
+	status: new Set(["Setup","Waiting","In-Wave"]),
+	players: {
+  	min: 0,
+    max: 6
+  }
+}
+
+function start() {
+
+  let control = `<div style="background-color: white; position: absolute;top: 70px;right: 10px;display: flex; flex-direction: column; font-size: unset;">
+
+<fieldset>
+  <legend>Difficulty</legend>
+  <div>
+    <input type="checkbox" id="expert" name="difficulty" value="Expert" checked />
+    <label for="expert">Expert</label>
+  </div>
+  <div>
+    <input type="checkbox" id="advanced" name="difficulty" value="Advanced" checked />
+    <label for="advanced">Advanced</label>
+  </div>
+  <div>
+    <input type="checkbox" id="intermediate" name="difficulty" value="Intermediate" checked />
+    <label for="intermediate">Intermediate</label>
+  </div>
+</fieldset>
+
+<fieldset>
+  <legend>Mission</legend>
+  <div>
+    <input type="checkbox" id="completed" name="completed" value="true" checked />
+    <label for="completed">Completed</label>
+  </div>
+  <div>
+    <input type="checkbox" id="not_completed" name="completed" value="false" checked />
+    <label for="not_completed">Not Completed</label>
+</div>
+</fieldset>
+
+<fieldset>
+  <legend>Wave</legend>
+  <div>
+    <input type="number" id="wave_max" name="wave" data-bound="max" value="8"/>
+    <label for="wave_max">max</label>
+  </div>
+  <div>
+    <input type="number" id="wave_min" name="wave" data-bound="min" value="0"/>
+    <label for="wave_min">min</label>
+  </div>
+</fieldset>
+
+<fieldset>
+  <legend>Status</legend>
+  <div>
+    <input type="checkbox" id="setup" name="status" value="Setup" checked />
+    <label for="setup">Setup</label>
+  </div>
+  <div>
+    <input type="checkbox" id="waiting" name="status" value="Waiting" checked />
+    <label for="waiting">Waiting</label>
+  </div>
+  <div>
+    <input type="checkbox" id="inwave" name="status" value="In-Wave" checked />
+    <label for="inwave">In-Wave</label>
+  </div>
+</fieldset>
+
+<fieldset>
+  <legend>Players</legend>
+  <div>
+    <input type="number" id="player_max" name="players" data-bound="max" value="6"/>
+    <label for="player_max">max</label>
+  </div>
+  <div>
+    <input type="number" id="player_min" name="players" data-bound="min" value="0"/>
+    <label for="player_min">min</label>
+  </div>
+</fieldset>
+
+</div>`
+
+  document.body.insertAdjacentHTML("beforeend", control)
+
+
+
+  //  const overall = document.querySelector("#enchantment");
+  const ingredients = document.querySelectorAll("fieldset div input");
+
+  // overall.addEventListener("click", (e) => {
+  //   e.preventDefault();
+  // });
+
+  for (const ingredient of ingredients) {
+    ingredient.addEventListener("click", updateDisplay);
+  }
+
+  function updateDisplay(e) {
+    if (e.target.type == "checkbox") {
+      if (e.target.checked) {
+        config[e.target.name].add(e.target.value)
+      }
+      else {
+				config[e.target.name].delete(e.target.value)
+      }
+    }
+    else if (e.target.type == "number") {
+      config[e.target.name][e.target.dataset.bound] = e.target.value
+    }
+    else {
+      console.log("error");
+    }
+    console.log(config)
+
+  }
+  setTimeout(r, 3000);
+}
+
+//form on click update filters
 
 function r() {
   let servers = document.getElementById("serverDeck").childNodes;
@@ -22,13 +147,13 @@ function r() {
       const mission = cols[5].childNodes[1].textContent.trim();
       const done = cols[5].childNodes[1].childNodes.length > 1 ? true : false;
 
-      const difficulty = cols[7].childNodes[1].childNodes[0].textContent;
+      const difficulty = cols[7].childNodes[1].childNodes[0].textContent ?? "";
       const wave = cols[9].childNodes[1].textContent;
-      const wave_current = wave.split('/')[0].trim();
-      const wave_total = wave.split('/')[1].trim();
-      const state = cols[11].childNodes[1].textContent;
+      const wave_current = parseInt(wave.split('/')[0].trim());
+      const wave_total = parseInt(wave.split('/')[1].trim());
+      const state = cols[11].childNodes[1].textContent ?? "";
 
-      const players_present = cols[13].childNodes[1].childNodes[0].textContent.split('/')[0].trim();
+      const players_present = parseInt(cols[13].childNodes[1].childNodes[0].textContent.split('/')[0].trim());
 
       //const players_total = cols[13].childNodes[1].childNodes[1].textContent;
       //const players_total = cols[13].childNodes[1].childNodes[2].textContent;
@@ -49,15 +174,24 @@ function r() {
         e.preventDefault();
       };
 
-      connect.addEventListener('click', write, false);
+      connect.addEventListener("click", write, false);
       connect.onclick = "";
 
-      if (state == "In-Wave" || wave_current != "1" || players_present == "6" || done) {
-        server.style.display = 'none';
-        //server.style.cssText = 'background-color: red !important';
+      
+      if(!config.difficulty.has(difficulty) || !config.status.has(state) || 
+         config.wave.max < wave_current || config.wave.min > wave_current || 
+         config.players.max < players_present || config.players.min > players_present || 
+         !config.completed.has(done.toString())) {
+        //server.style.display = "none";
+        server.style.cssText = "background-color: red !important";
+      }
+      else {
+        server.style.display = "";
+        server.style.cssText = "";
       }
     }
   }
   setTimeout(r, 3000);
 }
-setTimeout(r, 3000);
+
+start();
