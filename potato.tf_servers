@@ -9,8 +9,7 @@
 
 "use strict";
 
-//save load from localstorage?
-
+//default config value
 let config = {
   difficulty: new Set(["Expert", "Advanced", "Intermediate"]),
   completed: new Set(["true", "false"]),
@@ -26,35 +25,53 @@ let config = {
   replace_connect: true
 }
 
-function start() {
+async function start() {
 
+  //wait for server list to load
+  await new Promise(r => setTimeout(r, 1000));
+
+  //load saved config
+  var saved_config = localStorage.getItem("config");
+  try {
+    saved_config = JSON.parse(saved_config, (_key, value) => (value instanceof Array ? new Set(value) : value))
+    config = saved_config
+    console.log("loaded saved config")
+  }
+  catch (e) {
+    console.log("failed to load saved config")
+  }
+
+  //probe server list to get possible config values
+  let possible = probe();
+
+  //generate checkboxes for possible difficutly values
+  let difficulty = ""
+  for (let p of possible.difficulty) {
+    let checkbox =
+      `<div>
+        <input type="checkbox" id="${p}" name="difficulty" value="${p}" data-type="list" ${config.difficulty.has(p) ? "checked" : ""} />
+        <label for="${p}">${p}</label>
+     </div>`
+    difficulty = difficulty + "\n" + checkbox;
+  }
+
+  //create controls
   let control = `
 <div id="filter_panel" style="background-color: white; position: absolute;top: 70px;right: 10px;display: flex; flex-direction: column; font-size: unset;">
   <div id="filters">
     <fieldset>
       <legend>Difficulty</legend>
-      <div>
-        <input type="checkbox" id="expert" name="difficulty" value="Expert" data-type="list" checked />
-        <label for="expert">Expert</label>
-      </div>
-      <div>
-        <input type="checkbox" id="advanced" name="difficulty" value="Advanced" data-type="list" checked />
-        <label for="advanced">Advanced</label>
-      </div>
-      <div>
-        <input type="checkbox" id="intermediate" name="difficulty" value="Intermediate" data-type="list" checked />
-        <label for="intermediate">Intermediate</label>
-      </div>
+				${difficulty}
     </fieldset>
 
     <fieldset>
       <legend>Mission</legend>
       <div>
-        <input type="checkbox" id="completed" name="completed" value="true" data-type="list" checked />
+        <input type="checkbox" id="completed" name="completed" value="true" data-type="list" ${config.completed.has("true") ? "checked" : ""} />
         <label for="completed">Completed</label>
       </div>
       <div>
-        <input type="checkbox" id="not_completed" name="completed" value="false" data-type="list" checked />
+        <input type="checkbox" id="not_completed" name="completed" value="false" data-type="list" ${config.completed.has("false") ? "checked" : ""} />
         <label for="not_completed">Not Completed</label>
     </div>
     </fieldset>
@@ -62,11 +79,11 @@ function start() {
     <fieldset>
       <legend>Wave</legend>
       <div>
-        <input type="number" id="wave_max" name="wave" data-bound="max" value="8"/>
+        <input type="number" id="wave_max" name="wave" data-bound="max" value="${config.wave.max}" />
         <label for="wave_max">max</label>
       </div>
       <div>
-        <input type="number" id="wave_min" name="wave" data-bound="min" value="0"/>
+        <input type="number" id="wave_min" name="wave" data-bound="min" value="${config.wave.min}"/>
         <label for="wave_min">min</label>
       </div>
     </fieldset>
@@ -74,15 +91,15 @@ function start() {
     <fieldset>
       <legend>Status</legend>
       <div>
-        <input type="checkbox" id="setup" name="status" value="Setup" data-type="list" checked />
+        <input type="checkbox" id="setup" name="status" value="Setup" data-type="list" ${config.status.has("Setup") ? "checked" : ""} />
         <label for="setup">Setup</label>
       </div>
       <div>
-        <input type="checkbox" id="waiting" name="status" value="Waiting" data-type="list" checked />
+        <input type="checkbox" id="waiting" name="status" value="Waiting" data-type="list" ${config.status.has("Waiting") ? "checked" : ""} />
         <label for="waiting">Waiting</label>
       </div>
       <div>
-        <input type="checkbox" id="inwave" name="status" value="In-Wave" data-type="list" checked />
+        <input type="checkbox" id="inwave" name="status" value="In-Wave" data-type="list" ${config.status.has("In-Wave") ? "checked" : ""} />
         <label for="inwave">In-Wave</label>
       </div>
     </fieldset>
@@ -90,11 +107,11 @@ function start() {
     <fieldset>
       <legend>Players</legend>
       <div>
-        <input type="number" id="player_max" name="players" data-bound="max" value="6"/>
+        <input type="number" id="player_max" name="players" data-bound="max" value="${config.players.max}"/>
         <label for="player_max">max</label>
       </div>
       <div>
-        <input type="number" id="player_min" name="players" data-bound="min" value="0"/>
+        <input type="number" id="player_min" name="players" data-bound="min" value="${config.players.min}"/>
         <label for="player_min">min</label>
       </div>
     </fieldset>
@@ -103,7 +120,7 @@ function start() {
     <fieldset>
       <legend>Options</legend>
       <div>
-        <input type="checkbox" id="replace_links" name="replace_connect" data-type="boolean" checked/>
+        <input type="checkbox" id="replace_links" name="replace_connect" data-type="boolean" ${config.replace_connect ? "checked" : ""}/>
         <label for="replace_links">Replace Links</label>
       </div>
     </fieldset>
@@ -136,13 +153,77 @@ function start() {
     else {
       console.log("error");
     }
+
+    localStorage.setItem("config", JSON.stringify(config, (_key, value) => (value instanceof Set ? [...value] : value)));
     //run filter immediatly?
   }
+
+  //run first cycle of updates
   r();
 }
 
+function probe() {
+  let servers = document.getElementById("serverDeck").childNodes;
+
+  let possible = {
+    difficulty: new Set(),
+    completed: new Set(["true", "false"]),
+    wave: {
+      min: 0,
+      max: 1
+    },
+    status: new Set(),
+    players: {
+      min: 0,
+      max: 1
+    },
+    replace_connect: true
+  }
+
+  for (const server of servers) {
+    if (server instanceof HTMLDivElement) {
+      let cols = server.childNodes;
+
+      //const server = cols[1].childNodes[1];
+      const map = cols[3].childNodes[1].textContent;
+
+      const mission = cols[5].childNodes[1].textContent.trim();
+      const done = cols[5].childNodes[1].childNodes.length > 1 ? true : false;
+
+      const difficulty = cols[7].childNodes[1].childNodes[0].textContent;
+      const wave = cols[9].childNodes[1].textContent;
+      const wave_current = parseInt(wave.split('/')[0].trim());
+
+      let wave_total = parseInt(wave.split('/')[1].trim());
+
+      //handel case wave count is '?' 
+      wave_total = isNaN(wave_total) ? 1 : wave_total
+
+      const state = cols[11].childNodes[1].textContent;
+
+      const players_present = parseInt(cols[13].childNodes[1].childNodes[0].textContent.split('/')[0].trim()); // ignores (+n)
+
+      const players_total = cols[13].childNodes[1].childNodes[1].textContent;
+
+      //const players_total = cols[13].childNodes[1].childNodes[2].textContent;
+      //const classes = cols[15].childNodes[1];
+
+      const connect = cols[17].childNodes[1]; //ping filter?
+
+      possible.difficulty.add(difficulty)
+      possible.status.add(state)
+
+      possible.wave.max = Math.max(possible.wave.max, wave_total)
+      possible.players.max = Math.max(possible.players.max, players_total)
+    }
+  }
+
+  return possible;
+}
+
+
+
 function r() {
-  //save server list to avoid resparse between updates?
   let servers = document.getElementById("serverDeck").childNodes;
 
   for (const server of servers) {
@@ -163,11 +244,13 @@ function r() {
 
       const players_present = parseInt(cols[13].childNodes[1].childNodes[0].textContent.split('/')[0].trim()); // ignores (+n)
 
-      //const players_total = cols[13].childNodes[1].childNodes[1].textContent;
+      const players_total = cols[13].childNodes[1].childNodes[1].textContent;
+
       //const players_total = cols[13].childNodes[1].childNodes[2].textContent;
       //const classes = cols[15].childNodes[1];
 
       const connect = cols[17].childNodes[1]; //ping filter?
+
 
       if (config.replace_connect) {
         const text = "connect " + connect.href.split('/')[4];
