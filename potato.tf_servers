@@ -13,6 +13,8 @@
 let config = {
   difficulty: new Set(["Expert", "Advanced", "Intermediate"]),
   completed: new Set(["true", "false"]),
+  maps: new Set(),
+  missions: new Set(),
   wave: {
     min: 0,
     max: 8
@@ -22,19 +24,35 @@ let config = {
     min: 0,
     max: 6
   },
-  replace_connect: true
+  disable: false,
+  replace_connect: true,
+  show_maps: false,
+  show_missions: false
 }
+
+const INITIAL_LOAD_TIME = 1000; //ms
+const DEBUG = false;
 
 async function start() {
 
-  //wait for server list to load
-  await new Promise(r => setTimeout(r, 1000));
+  //wait for server list to load TODO: Replace with change detection
+  //TODO: reprobe and re update on mutation -> no need for init time.
+  //TODO: track checked and unchecked maps to be able to identify new maps etc.
+  //TODO: remove code duplication from probe and update by combining them
+  await new Promise(r => setTimeout(r, INITIAL_LOAD_TIME));
+
+  const targetNode = document.getElementById("serverDeck");
+  const observer = new MutationObserver((m, o) => {
+    console.log("running update")
+    update()
+  });
+  observer.observe(targetNode, { childList: true });
 
   //load saved config
   var saved_config = localStorage.getItem("config");
   try {
     saved_config = JSON.parse(saved_config, (_key, value) => (value instanceof Array ? new Set(value) : value))
-    config = saved_config
+    config = saved_config ?? config
     console.log("loaded saved config")
   }
   catch (e) {
@@ -42,7 +60,7 @@ async function start() {
   }
 
   //probe server list to get possible config values
-  let possible = probe();
+  let possible = update();
 
   //generate checkboxes for possible difficutly values
   let difficulty = ""
@@ -53,6 +71,28 @@ async function start() {
         <label for="${p}">${p}</label>
      </div>`
     difficulty = difficulty + "\n" + checkbox;
+  }
+
+  //generate checkboxes for possible map values
+  let maps = ""
+  for (let p of possible.maps) {
+    let checkbox =
+      `<div>
+        <input type="checkbox" id="${p}" name="maps" value="${p}" data-type="list" ${config.maps.has(p) ? "checked" : ""} />
+        <label for="${p}">${p}</label>
+     </div>`
+    maps = maps + "\n" + checkbox;
+  }
+
+  //generate checkboxes for possible mission values
+  let missions = ""
+  for (let p of possible.missions) {
+    let checkbox =
+      `<div>
+          <input type="checkbox" id="${p}" name="missions" value="${p}" data-type="list" ${config.missions.has(p) ? "checked" : ""} />
+          <label for="${p}">${p}</label>
+       </div>`
+    missions = missions + "\n" + checkbox;
   }
 
   //create controls
@@ -115,7 +155,23 @@ async function start() {
         <label for="player_min">min</label>
       </div>
     </fieldset>
+
+    <fieldset>
+      <legend class="toggles" data-target-id="maps-list" data-setting="show_maps">Maps</legend>
+      <div id="maps-list" style="display: ${config.show_maps ? "" : "none"}">
+        ${maps}
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend class="toggles" data-target-id="missions-list" data-setting="show_missions">Missions</legend>
+      <div id="missions-list" style="display: ${config.show_missions ? "" : "none"}">
+        ${missions}
+      </div>
+    </fieldset>
+
   </div>
+
   <div id="options">
     <fieldset>
       <legend>Options</legend>
@@ -123,19 +179,30 @@ async function start() {
         <input type="checkbox" id="replace_links" name="replace_connect" data-type="boolean" ${config.replace_connect ? "checked" : ""}/>
         <label for="replace_links">Replace Links</label>
       </div>
+      <div>
+        <input type="checkbox" id="disable" name="disable" data-type="boolean" ${config.disable ? "checked" : ""}/>
+        <label for="disable">Disable Filters</label>
+      </div>
     </fieldset>
   </div>
 </div>`
 
   document.body.insertAdjacentHTML("beforeend", control)
 
+  const toggles = document.querySelectorAll(".toggles");
+
+  toggles.forEach(x => x.addEventListener("click", (event) => {
+    const id = x.dataset.targetId;
+    const target = document.getElementById(id);
+    const seen = target.checkVisibility()
+    target.style.display = seen ? "none" : "";
+    config[x.dataset.setting] = !seen
+    localStorage.setItem("config", JSON.stringify(config, (_key, value) => (value instanceof Set ? [...value] : value)));
+  }));
+
   const ingredients = document.querySelectorAll("#filter_panel fieldset div input");
 
-  for (const ingredient of ingredients) {
-    ingredient.addEventListener("click", updateDisplay);
-  }
-
-  function updateDisplay(e) {
+  ingredients.forEach(ig => ig.addEventListener("click", (e) => {
     if (e.target.type == "checkbox" && e.target.dataset.type == "list") {
       if (e.target.checked) {
         config[e.target.name].add(e.target.value);
@@ -155,19 +222,19 @@ async function start() {
     }
 
     localStorage.setItem("config", JSON.stringify(config, (_key, value) => (value instanceof Set ? [...value] : value)));
-    //run filter immediatly?
-  }
+    update();
+  }));
 
-  //run first cycle of updates
-  r();
+  update();
 }
 
-function probe() {
+function update() {
   let servers = document.getElementById("serverDeck").childNodes;
 
   let possible = {
     difficulty: new Set(),
-    completed: new Set(["true", "false"]),
+    maps: new Set(),
+    missions: new Set(),
     wave: {
       min: 0,
       max: 1
@@ -177,7 +244,6 @@ function probe() {
       min: 0,
       max: 1
     },
-    replace_connect: true
   }
 
   for (const server of servers) {
@@ -195,7 +261,6 @@ function probe() {
       const wave_current = parseInt(wave.split('/')[0].trim());
 
       let wave_total = parseInt(wave.split('/')[1].trim());
-
       //handel case wave count is '?' 
       wave_total = isNaN(wave_total) ? 1 : wave_total
 
@@ -210,48 +275,16 @@ function probe() {
 
       const connect = cols[17].childNodes[1]; //ping filter?
 
+      possible.maps.add(map)
+      possible.missions.add(mission)
+
       possible.difficulty.add(difficulty)
       possible.status.add(state)
 
       possible.wave.max = Math.max(possible.wave.max, wave_total)
       possible.players.max = Math.max(possible.players.max, players_total)
-    }
-  }
 
-  return possible;
-}
-
-
-
-function r() {
-  let servers = document.getElementById("serverDeck").childNodes;
-
-  for (const server of servers) {
-    if (server instanceof HTMLDivElement) {
-      let cols = server.childNodes;
-
-      //const server = cols[1].childNodes[1];
-      const map = cols[3].childNodes[1].textContent;
-
-      const mission = cols[5].childNodes[1].textContent.trim();
-      const done = cols[5].childNodes[1].childNodes.length > 1 ? true : false;
-
-      const difficulty = cols[7].childNodes[1].childNodes[0].textContent;
-      const wave = cols[9].childNodes[1].textContent;
-      const wave_current = parseInt(wave.split('/')[0].trim());
-      const wave_total = parseInt(wave.split('/')[1].trim()); // can be '?'
-      const state = cols[11].childNodes[1].textContent;
-
-      const players_present = parseInt(cols[13].childNodes[1].childNodes[0].textContent.split('/')[0].trim()); // ignores (+n)
-
-      const players_total = cols[13].childNodes[1].childNodes[1].textContent;
-
-      //const players_total = cols[13].childNodes[1].childNodes[2].textContent;
-      //const classes = cols[15].childNodes[1];
-
-      const connect = cols[17].childNodes[1]; //ping filter?
-
-
+      //Replace link. This fixed issues with opening server from browser
       if (config.replace_connect) {
         const text = "connect " + connect.href.split('/')[4];
 
@@ -270,21 +303,33 @@ function r() {
         connect.onclick = ""; //nessary?
       }
 
-      if (!config.difficulty.has(difficulty) || !config.status.has(state) ||
-        config.wave.max < wave_current || config.wave.min > wave_current ||
-        config.players.max < players_present || config.players.min > players_present ||
-        !config.completed.has(done.toString())) {
-        server.style.display = "none";
-        //server.style.cssText = "background-color: red !important";
+      //Show or Hide
+      if (!config.disable &&
+        (!config.difficulty.has(difficulty) || !config.status.has(state) ||
+          config.wave.max < wave_current || config.wave.min > wave_current ||
+          config.players.max < players_present || config.players.min > players_present ||
+          !config.completed.has(done.toString()) ||
+          !config.maps.has(map) || !config.missions.has(mission)
+        )) {
+        if (DEBUG) {
+          server.style.cssText = "background-color: red !important";
+        }
+        else {
+          server.style.display = "none";
+        }
       }
       else {
-        server.style.display = "";
-        //server.style.cssText = "";
+        if (DEBUG) {
+          server.style.cssText = "";
+        }
+        else {
+          server.style.display = "";
+        }
       }
+
+      return possible;
     }
   }
-  //sync to native server list update?
-  setTimeout(r, 1000);
 }
 
 start();
