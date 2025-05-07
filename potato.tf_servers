@@ -36,6 +36,9 @@ const DEBUG = false;
 async function start() {
 
   //wait for server list to load TODO: Replace with change detection
+  //TODO: reprobe and re update on mutation -> no need for init time.
+  //TODO: track checked and unchecked maps to be able to identify new maps etc.
+  //TODO: remove code duplication from probe and update by combining them
   await new Promise(r => setTimeout(r, INITIAL_LOAD_TIME));
 
   const targetNode = document.getElementById("serverDeck");
@@ -57,7 +60,7 @@ async function start() {
   }
 
   //probe server list to get possible config values
-  let possible = probe();
+  let possible = update();
 
   //generate checkboxes for possible difficutly values
   let difficulty = ""
@@ -225,7 +228,7 @@ async function start() {
   update();
 }
 
-function probe() {
+function update() {
   let servers = document.getElementById("serverDeck").childNodes;
 
   let possible = {
@@ -280,43 +283,6 @@ function probe() {
 
       possible.wave.max = Math.max(possible.wave.max, wave_total)
       possible.players.max = Math.max(possible.players.max, players_total)
-    }
-  }
-
-  return possible;
-}
-
-function update() {
-  let servers = document.getElementById("serverDeck").childNodes;
-
-  for (const server of servers) {
-    if (server instanceof HTMLDivElement) {
-      let cols = server.childNodes;
-
-      //const server = cols[1].childNodes[1];
-      const map = cols[3].childNodes[1].textContent;
-
-      const mission = cols[5].childNodes[1].textContent.trim();
-      const done = cols[5].childNodes[1].childNodes.length > 1 ? true : false;
-
-      const difficulty = cols[7].childNodes[1].childNodes[0].textContent;
-      const wave = cols[9].childNodes[1].textContent;
-      const wave_current = parseInt(wave.split('/')[0].trim());
-
-      let wave_total = parseInt(wave.split('/')[1].trim());
-      //handel case wave count is '?' 
-      wave_total = isNaN(wave_total) ? 1 : wave_total
-
-      const state = cols[11].childNodes[1].textContent;
-
-      const players_present = parseInt(cols[13].childNodes[1].childNodes[0].textContent.split('/')[0].trim()); // ignores (+n)
-
-      const players_total = cols[13].childNodes[1].childNodes[1].textContent;
-
-      //const players_total = cols[13].childNodes[1].childNodes[2].textContent;
-      //const classes = cols[15].childNodes[1];
-
-      const connect = cols[17].childNodes[1]; //ping filter?
 
       //Replace link. This fixed issues with opening server from browser
       if (config.replace_connect) {
@@ -361,6 +327,7 @@ function update() {
         }
       }
 
+      return possible;
     }
   }
 }
