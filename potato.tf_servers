@@ -256,24 +256,25 @@ function update() {
       const mission = cols[5].childNodes[1].textContent.trim();
       const done = cols[5].childNodes[1].childNodes.length > 1 ? true : false;
 
-      const difficulty = cols[7].childNodes[1].childNodes[0].textContent;
-      const wave = cols[9].childNodes[1].textContent;
+      const compaign = cols[7].childNodes[1].textContent.trim();
+
+      const difficulty = cols[9].childNodes[1].childNodes[0].textContent;
+      const wave = cols[11].childNodes[1].textContent;
       const wave_current = parseInt(wave.split('/')[0].trim());
 
       let wave_total = parseInt(wave.split('/')[1].trim());
       //handel case wave count is '?' 
       wave_total = isNaN(wave_total) ? 1 : wave_total
 
-      const state = cols[11].childNodes[1].textContent;
+      const state = cols[13].childNodes[1].textContent;
 
-      const players_present = parseInt(cols[13].childNodes[1].childNodes[0].textContent.split('/')[0].trim()); // ignores (+n)
+      const players_present = parseInt(cols[15].childNodes[1].childNodes[0].textContent.split('/')[0].trim()); // ignores (+n)
 
-      const players_total = cols[13].childNodes[1].childNodes[1].textContent;
+      const players_total = [...cols[15].childNodes[1].childNodes].at(-1).textContent;
 
-      //const players_total = cols[13].childNodes[1].childNodes[2].textContent;
-      //const classes = cols[15].childNodes[1];
+      //const classes = cols[17].childNodes[1];
 
-      const connect = cols[17].childNodes[1]; //ping filter?
+      const connect = cols[19].childNodes[1]; //ping filter?
 
       possible.maps.add(map)
       possible.missions.add(mission)
@@ -326,10 +327,9 @@ function update() {
           server.style.display = "";
         }
       }
-
-      return possible;
     }
   }
+  return possible;
 }
 
 start();
