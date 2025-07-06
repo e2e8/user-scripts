@@ -7,6 +7,10 @@
 // @description This script filters the list of servers listed by the potatoe.tf server browser based on filter criteria
 // ==/UserScript==
 
+//TODO: track checked and unchecked maps to be able to identify new maps etc.
+//TODO: enable/disable individual filters
+//TODO: add event handler for text change of input boxes
+
 "use strict";
 
 //default config value
@@ -27,26 +31,31 @@ let config = {
   disable: false,
   replace_connect: true,
   show_maps: false,
-  show_missions: false
+  show_missions: false,
+  ping: {
+    max: 120
+  }
 }
 
-const INITIAL_LOAD_TIME = 1000; //ms
 const DEBUG = false;
+let initilized = false;
 
 async function start() {
-
-  //wait for server list to load TODO: Replace with change detection
-  //TODO: reprobe and re update on mutation -> no need for init time.
-  //TODO: track checked and unchecked maps to be able to identify new maps etc.
-  //TODO: remove code duplication from probe and update by combining them
-  await new Promise(r => setTimeout(r, INITIAL_LOAD_TIME));
-
   const targetNode = document.getElementById("serverDeck");
   const observer = new MutationObserver((m, o) => {
-    console.log("running update")
-    update()
+    if (!initilized) {
+      init()
+      initilized = true;
+    }
+    else {
+      console.log("running update")
+      update()
+    }
   });
   observer.observe(targetNode, { childList: true });
+}
+
+function init() {
 
   //load saved config
   var saved_config = localStorage.getItem("config");
@@ -157,6 +166,14 @@ async function start() {
     </fieldset>
 
     <fieldset>
+      <legend>Ping</legend>
+      <div>
+        <input type="number" id="ping_max" name="ping" data-bound="max" value="${config.ping.max}"/>
+        <label for="ping_max">max</label>
+      </div>
+    </fieldset>
+
+    <fieldset>
       <legend class="toggles" data-target-id="maps-list" data-setting="show_maps">Maps</legend>
       <div id="maps-list" style="display: ${config.show_maps ? "" : "none"}">
         ${maps}
@@ -224,8 +241,6 @@ async function start() {
     localStorage.setItem("config", JSON.stringify(config, (_key, value) => (value instanceof Set ? [...value] : value)));
     update();
   }));
-
-  update();
 }
 
 function update() {
@@ -250,7 +265,7 @@ function update() {
     if (server instanceof HTMLDivElement) {
       let cols = server.childNodes;
 
-      //const server = cols[1].childNodes[1];
+      const location = cols[1].childNodes[1];
       const map = cols[3].childNodes[1].textContent;
 
       const mission = cols[5].childNodes[1].textContent.trim();
@@ -263,8 +278,8 @@ function update() {
       const wave_current = parseInt(wave.split('/')[0].trim());
 
       let wave_total = parseInt(wave.split('/')[1].trim());
-      //handel case wave count is '?' 
-      wave_total = isNaN(wave_total) ? 1 : wave_total
+
+      wave_total = isNaN(wave_total) ? 1 : wave_total //handel case wave count is '?' 
 
       const state = cols[13].childNodes[1].textContent;
 
@@ -272,9 +287,12 @@ function update() {
 
       const players_total = [...cols[15].childNodes[1].childNodes].at(-1).textContent;
 
-      //const classes = cols[17].childNodes[1];
+      const classes = cols[17].childNodes[1];
 
-      const connect = cols[19].childNodes[1]; //ping filter?
+      const spec = cols[19].childNodes[1];
+
+      const connect = cols[21].childNodes[1]
+      const ping = parseInt(connect.childNodes[1].childNodes[0].textContent.split(" ")[0])
 
       possible.maps.add(map)
       possible.missions.add(mission)
@@ -309,6 +327,7 @@ function update() {
         (!config.difficulty.has(difficulty) || !config.status.has(state) ||
           config.wave.max < wave_current || config.wave.min > wave_current ||
           config.players.max < players_present || config.players.min > players_present ||
+          config.ping.max < ping ||
           !config.completed.has(done.toString()) ||
           !config.maps.has(map) || !config.missions.has(mission)
         )) {
